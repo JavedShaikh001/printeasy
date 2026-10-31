@@ -1,0 +1,78 @@
+# Builds the three installers automatically on GitHub's Windows, Mac and Linux machines.
+# Push a tag like v1.0.0 to also publish them as a GitHub Release people can download.
+name: Build installers
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  test:
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: { python-version: "3.12" }
+      - run: pip install -r requirements.txt pytest
+      - run: python -m pytest -q tests
+
+  windows:
+    needs: test
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: { python-version: "3.12" }
+      - name: Install Inno Setup
+        run: choco install innosetup -y --no-progress
+      - name: Build installer
+        run: powershell -ExecutionPolicy Bypass -File packaging\windows\build_installer.ps1
+      - uses: actions/upload-artifact@v4
+        with: { name: PrintEasy-Windows, path: dist/installers/*.exe }
+
+  macos:
+    needs: test
+    runs-on: macos-latest          # Apple Silicon (M1/M2/M3/M4) Macs
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: { python-version: "3.12" }
+      - name: Build .dmg
+        env:
+          MAC_SIGN_ID: ${{ secrets.MAC_SIGN_ID }}
+          MAC_NOTARY_PROFILE: ${{ secrets.MAC_NOTARY_PROFILE }}
+        run: bash packaging/macos/build_dmg.sh
+      - uses: actions/upload-artifact@v4
+        with: { name: PrintEasy-macOS, path: dist/installers/*.dmg }
+
+  linux:
+    needs: test
+    runs-on: ubuntu-22.04          # older base = works on more Linux versions
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: { python-version: "3.12" }
+      - name: Build .deb
+        run: bash packaging/linux/build_deb.sh
+      - uses: actions/upload-artifact@v4
+        with: { name: PrintEasy-Linux, path: dist/installers/*.deb }
+
+  release:
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: [windows, macos, linux]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with: { path: out, merge-multiple: true }
+      - uses: softprops/action-gh-release@v2
+        with:
+          files: out/*
+          body: |
+            **Download the one for your computer:**
+            - Windows 10/11: `PrintEasy-Setup-…-Windows.exe` — double-click and follow the steps.
+            - Mac: `PrintEasy-…-macOS-arm64.dmg` — open it and drag PrintEasy into Applications.
+            - Linux (Ubuntu, Mint, Debian): `PrintEasy-…-Linux-amd64.deb` — double-click and press Install.

@@ -1,0 +1,11 @@
+[Desktop Entry]
+Type=Application
+Name=PrintEasy
+GenericName=Printer Setup
+Comment=Connect any printer without the headache
+Exec=printeasy
+Icon=printeasy
+Terminal=false
+Categories=Settings;HardwareSettings;Printing;
+Keywords=printer;print;wifi;usb;scanner;
+StartupWMClass=printeasy
